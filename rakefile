@@ -1,0 +1,116 @@
+# coding: UTF-8
+require 'rake/packagetask'
+require 'rake/clean'
+IS_WIN = RUBY_PLATFORM.downcase =~ /mswin(?!ce)|mingw|cygwin|bccwin/
+
+#設定
+
+###########################################################################
+##
+## 以下開発用
+##
+###########################################################################
+
+###このプロジェクト用の特別な定義
+###Linuxでコンパイルするときはここだけいじればいいはず。
+EXT_CXXFLAGS = '-IG:/gcc/msys/app/SDL/include'
+EXT_CFLAGS = ''
+EXT_CPPFLAGS = ''
+
+EXT_LDFLAGS = '-LG:/gcc/msys/app/SDL/lib'
+EXT_LIBS = '-lmingw32 -lSDLmain -lSDL -lopengl32 -mwindows'
+
+SOFTWARE_NAME = "TamaTest"
+SOFTWARE_VER = "1.0"
+
+###########################################################################
+## ファイル群
+###########################################################################
+
+PACKAGE = SOFTWARE_NAME
+
+SRCS  = (FileList["src/**/*.cpp"] + FileList["src/**/*.c"]).exclude("**/.svn")
+HEADS = (FileList["src/**/*.hpp"] + FileList["src/**/*.h"]).exclude("**/.svn")
+
+###変換
+OBJS = SRCS.ext('o')
+
+###削除するものの指定
+CLEAN.include("**/*.o")
+
+#for windows
+if IS_WIN
+  CLEAN.include("**/*.exe")
+else
+  CLEAN.include(PACKAGE)
+end
+
+###########################################################################
+## パッケージタスク
+###########################################################################
+
+Rake::PackageTask.new(SOFTWARE_NAME+"_src", SOFTWARE_VER) do |p|
+  p.package_dir = "./pgk"
+  p.package_files.include(SRCS)
+  p.package_files.include(HEADS)
+  p.package_files.include("rakefile")
+  p.need_tar_gz = true
+  p.need_tar_bz2 = true
+end
+
+###########################################################################
+## 定数定義
+###########################################################################
+
+$LinkDebug  = ""
+$LinkRelease = "-s -DNDEBUG"
+
+# common (*.o)
+LD  = "gcc"
+LDFLAGS = "#{EXT_LDFLAGS}"
+LDLIBS  = "#{EXT_LIBS}"
+
+# C (*.c)
+CC  = "gcc"
+CFLAGS  = "-g -O3 -Wall -I. #{EXT_CXXFLAGS} #{EXT_CFLAGS}"
+
+# C++ (*.cpp)
+CPP	= "g++"
+CPPFLAGS= "-g -O3 -Wall -I. #{EXT_CXXFLAGS} #{EXT_CPPFLAGS}"
+
+###########################################################################
+## コンパイル時に利用するターゲット
+###########################################################################
+
+desc "default"
+task :default => :all
+
+desc "all"
+task :all => PACKAGE
+
+desc "for debug"
+task :debug => [:prepare_debug,:all]
+
+desc "link"
+task PACKAGE => OBJS do |t|
+  sh "#{LD} #{LDFLAGS} #{$LinkDebug} #{$LinkRelease} #{t.prerequisites.join(' ')} -o #{t.name} #{LDLIBS}"
+end
+
+desc ""
+task :prepare_debug do |t|
+	$LinkDebug  = "-ggdb -pg"
+	$LinkRelease = ""
+end
+
+###########################################################################
+## ルール
+###########################################################################
+
+rule '.o' => '.c' do |t|
+  sh "#{CC} #{CFLAGS} -c #{t.source} -o #{t.name}"
+end
+
+rule '.o' => '.cpp' do |t|
+  sh "#{CPP} #{CPPFLAGS} -c #{t.source} -o #{t.name}"
+end
+
